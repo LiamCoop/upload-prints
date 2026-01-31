@@ -10,6 +10,16 @@ export async function POST(
   try {
     const user = await requireAuth();
     const { orderId, fileId } = await params;
+    let body: { fileType?: 'uploaded' | 'processed' } | null = null;
+
+    try {
+      body = await request.json();
+    } catch {
+      body = null;
+    }
+
+    const requestedFileType = body?.fileType === 'processed' ? 'processed' : 'uploaded';
+    const isAdmin = user.role === 'ADMIN';
 
     // Verify order exists and belongs to user
     const order = await prisma.order.findUnique({
@@ -20,11 +30,48 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    if (order.userId !== user.id) {
+    if (!isAdmin && order.userId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get the file record
+    if (requestedFileType === 'processed' && !isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    if (requestedFileType === 'processed') {
+      const file = await prisma.processedFile.findUnique({
+        where: { id: fileId },
+      });
+
+      if (!file) {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+
+      if (file.orderId !== orderId) {
+        return NextResponse.json({ error: 'File does not belong to this order' }, { status: 400 });
+      }
+
+      const exists = await verifyFileExists(file.storageKey);
+
+      if (!exists) {
+        return NextResponse.json(
+          { error: 'File not found in storage' },
+          { status: 400 }
+        );
+      }
+
+      const updatedFile = await prisma.processedFile.update({
+        where: { id: fileId },
+        data: { storageUrl: file.storageKey },
+      });
+
+      return NextResponse.json({
+        id: updatedFile.id,
+        fileName: updatedFile.fileName,
+        fileType: 'processed',
+      });
+    }
+
     const file = await prisma.uploadedFile.findUnique({
       where: { id: fileId },
     });
@@ -37,11 +84,9 @@ export async function POST(
       return NextResponse.json({ error: 'File does not belong to this order' }, { status: 400 });
     }
 
-    // Verify file was actually uploaded to storage
     const exists = await verifyFileExists(file.storageKey);
 
     if (!exists) {
-      // Mark as failed if file doesn't exist in storage
       await prisma.uploadedFile.update({
         where: { id: fileId },
         data: { uploadStatus: 'FAILED' },
@@ -53,7 +98,6 @@ export async function POST(
       );
     }
 
-    // Update file status to completed
     const updatedFile = await prisma.uploadedFile.update({
       where: { id: fileId },
       data: {
@@ -66,6 +110,7 @@ export async function POST(
       id: updatedFile.id,
       fileName: updatedFile.fileName,
       uploadStatus: updatedFile.uploadStatus,
+      fileType: 'uploaded',
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unauthorized')) {

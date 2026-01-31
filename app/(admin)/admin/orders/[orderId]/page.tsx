@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { OrderStatus } from '@prisma/client';
+import { OrderActions } from '@/components/admin/order-actions';
+import { AdminFilesActions } from '@/components/admin/admin-files-actions';
 
 const statusLabels: Record<OrderStatus, string> = {
   RECEIVED: 'Received',
@@ -16,11 +18,11 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 const statusColors: Record<OrderStatus, string> = {
-  RECEIVED: 'bg-blue-100 text-blue-800',
-  REVIEWING: 'bg-yellow-100 text-yellow-800',
-  READY_FOR_PRINT: 'bg-purple-100 text-purple-800',
-  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800',
-  COMPLETED: 'bg-green-100 text-green-800',
+  RECEIVED: 'bg-blue-100 text-blue-800 hover:bg-blue-100 hover:text-blue-800',
+  REVIEWING: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 hover:text-yellow-800',
+  READY_FOR_PRINT: 'bg-purple-100 text-purple-800 hover:bg-purple-100 hover:text-purple-800',
+  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800 hover:bg-orange-100 hover:text-orange-800',
+  COMPLETED: 'bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800',
 };
 
 export default async function AdminOrderDetailPage({
@@ -36,7 +38,6 @@ export default async function AdminOrderDetailPage({
     include: {
       user: true,
       uploadedFiles: {
-        where: { uploadStatus: 'COMPLETED' },
         orderBy: { createdAt: 'asc' },
       },
       processedFiles: {
@@ -78,9 +79,12 @@ export default async function AdminOrderDetailPage({
             Submitted on {order.receivedAt.toLocaleDateString()}
           </p>
         </div>
-        <Badge className={statusColors[order.status]}>
-          {statusLabels[order.status]}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <Badge className={statusColors[order.status]}>
+            {statusLabels[order.status]}
+          </Badge>
+          <OrderActions orderId={order.id} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -153,17 +157,56 @@ export default async function AdminOrderDetailPage({
       </Card>
 
       <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Admin Uploaded Files</CardTitle>
+            <CardDescription>
+              {order.processedFiles.length} file{order.processedFiles.length !== 1 ? 's' : ''} uploaded by admin
+            </CardDescription>
+          </div>
+          <AdminFilesActions orderId={order.id} adminFileCount={order.processedFiles.length} />
+        </CardHeader>
+        <CardContent>
+          {order.processedFiles.length > 0 ? (
+            <ul className="space-y-4">
+              {order.processedFiles.map((file) => (
+                <li
+                  key={file.id}
+                  className="flex items-center justify-between p-4 bg-white rounded-md border border-gray-200 shadow-sm"
+                >
+                  <div>
+                    <p className="font-medium">{file.fileName}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatFileSize(file.fileSize)}
+                    </p>
+                    {file.notes && (
+                      <p className="text-sm text-muted-foreground mt-1">{file.notes}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">No admin files uploaded</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
         <CardHeader>
-          <CardTitle>Uploaded Files</CardTitle>
+          <CardTitle>Customer Uploaded Files</CardTitle>
           <CardDescription>
             {order.uploadedFiles.length} file{order.uploadedFiles.length !== 1 ? 's' : ''} from customer
           </CardDescription>
         </CardHeader>
         <CardContent>
           {order.uploadedFiles.length > 0 ? (
-            <ul className="space-y-2">
+            <ul className="space-y-4">
               {order.uploadedFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                <li
+                  key={file.id}
+                  className="flex items-center justify-between p-4 bg-white rounded-md border border-gray-200 shadow-sm"
+                >
                   <div>
                     <p className="font-medium">{file.fileName}</p>
                     <p className="text-sm text-muted-foreground">
@@ -178,32 +221,6 @@ export default async function AdminOrderDetailPage({
           )}
         </CardContent>
       </Card>
-
-      {order.processedFiles.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Processed Files</CardTitle>
-            <CardDescription>Files prepared for printing</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {order.processedFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div>
-                    <p className="font-medium">{file.fileName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(file.fileSize)}
-                    </p>
-                    {file.notes && (
-                      <p className="text-sm text-muted-foreground mt-1">{file.notes}</p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="flex gap-4">
         <Link href="/admin/orders">

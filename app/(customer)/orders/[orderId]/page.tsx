@@ -15,11 +15,11 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  RECEIVED: 'bg-blue-100 text-blue-800',
-  REVIEWING: 'bg-yellow-100 text-yellow-800',
-  READY_FOR_PRINT: 'bg-purple-100 text-purple-800',
-  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800',
-  COMPLETED: 'bg-green-100 text-green-800',
+  RECEIVED: 'bg-blue-100 text-blue-800 hover:bg-blue-100 hover:text-blue-800',
+  REVIEWING: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 hover:text-yellow-800',
+  READY_FOR_PRINT: 'bg-purple-100 text-purple-800 hover:bg-purple-100 hover:text-purple-800',
+  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800 hover:bg-orange-100 hover:text-orange-800',
+  COMPLETED: 'bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800',
 };
 
 export default async function OrderDetailPage({
@@ -46,7 +46,6 @@ export default async function OrderDetailPage({
     where: { id: orderId },
     include: {
       uploadedFiles: {
-        where: { uploadStatus: 'COMPLETED' },
         orderBy: { createdAt: 'asc' },
       },
       processedFiles: {
@@ -62,6 +61,48 @@ export default async function OrderDetailPage({
   if (order.userId !== user.id) {
     notFound();
   }
+
+  // Get all unique uploader clerk IDs
+  const uploaderClerkIds = new Set<string>();
+  order.uploadedFiles.forEach(file => uploaderClerkIds.add(file.uploadedBy));
+  order.processedFiles.forEach(file => uploaderClerkIds.add(file.uploadedBy));
+
+  // Fetch user info for all uploaders
+  const uploaders = await prisma.user.findMany({
+    where: {
+      clerkId: { in: Array.from(uploaderClerkIds) }
+    },
+    select: {
+      clerkId: true,
+      name: true,
+      email: true,
+      role: true,
+    }
+  });
+
+  const uploaderMap = new Map(uploaders.map(u => [u.clerkId, u]));
+
+  // Combine all files with uploader info
+  const allFiles = [
+    ...order.uploadedFiles.map(file => ({
+      id: file.id,
+      fileName: file.fileName,
+      fileSize: file.fileSize,
+      createdAt: file.createdAt,
+      uploadedBy: file.uploadedBy,
+      type: 'customer' as const,
+      notes: null,
+    })),
+    ...order.processedFiles.map(file => ({
+      id: file.id,
+      fileName: file.fileName,
+      fileSize: file.fileSize,
+      createdAt: file.createdAt,
+      uploadedBy: file.uploadedBy,
+      type: 'admin' as const,
+      notes: file.notes,
+    }))
+  ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -94,58 +135,62 @@ export default async function OrderDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Uploaded Files</CardTitle>
+          <CardTitle>Files</CardTitle>
           <CardDescription>
-            {order.uploadedFiles.length} file{order.uploadedFiles.length !== 1 ? 's' : ''} submitted
+            {allFiles.length} file{allFiles.length !== 1 ? 's' : ''} total
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {order.uploadedFiles.length > 0 ? (
-            <ul className="space-y-2">
-              {order.uploadedFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div>
-                    <p className="font-medium">{file.fileName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(file.fileSize)}
-                    </p>
-                  </div>
-                </li>
-              ))}
+          {allFiles.length > 0 ? (
+            <ul className="space-y-4">
+              {allFiles.map((file) => {
+                const uploader = uploaderMap.get(file.uploadedBy);
+                const isAdmin = uploader?.role === 'ADMIN';
+                const uploaderName = uploader?.name || uploader?.email || 'Unknown';
+
+                return (
+                  <li
+                    key={file.id}
+                    className="p-4 bg-white rounded-md border border-gray-200 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{file.fileName}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <p className="text-sm text-muted-foreground">
+                            {formatFileSize(file.fileSize)}
+                          </p>
+                          <span className="text-muted-foreground">•</span>
+                          <p className="text-sm text-muted-foreground">
+                            {file.createdAt.toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <p className="text-sm text-muted-foreground">
+                            Uploaded by {uploaderName}
+                          </p>
+                          {isAdmin && (
+                            <Badge variant="secondary" className="text-xs">
+                              Admin
+                            </Badge>
+                          )}
+                        </div>
+                        {file.notes && (
+                          <p className="text-sm text-muted-foreground mt-2 italic">
+                            Note: {file.notes}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             <p className="text-muted-foreground">No files uploaded</p>
           )}
         </CardContent>
       </Card>
-
-      {order.processedFiles.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Processed Files</CardTitle>
-            <CardDescription>
-              Files prepared by our team for printing
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-2">
-              {order.processedFiles.map((file) => (
-                <li key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                  <div>
-                    <p className="font-medium">{file.fileName}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {formatFileSize(file.fileSize)}
-                    </p>
-                    {file.notes && (
-                      <p className="text-sm text-muted-foreground mt-1">{file.notes}</p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
 
       <div className="flex gap-4">
         <Link href="/orders">

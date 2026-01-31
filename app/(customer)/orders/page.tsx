@@ -22,11 +22,11 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  RECEIVED: 'bg-blue-100 text-blue-800',
-  REVIEWING: 'bg-yellow-100 text-yellow-800',
-  READY_FOR_PRINT: 'bg-purple-100 text-purple-800',
-  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800',
-  COMPLETED: 'bg-green-100 text-green-800',
+  RECEIVED: 'bg-blue-100 text-blue-800 hover:bg-blue-100 hover:text-blue-800',
+  REVIEWING: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 hover:text-yellow-800',
+  READY_FOR_PRINT: 'bg-purple-100 text-purple-800 hover:bg-purple-100 hover:text-purple-800',
+  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800 hover:bg-orange-100 hover:text-orange-800',
+  COMPLETED: 'bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800',
 };
 
 export default async function OrdersPage() {
@@ -48,7 +48,10 @@ export default async function OrdersPage() {
     where: { userId: user.id },
     include: {
       _count: {
-        select: { uploadedFiles: true },
+        select: {
+          uploadedFiles: true,
+          processedFiles: true,
+        },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -87,7 +90,9 @@ export default async function OrdersPage() {
                 <TableRow key={order.id}>
                   <TableCell className="font-medium">{order.orderNumber}</TableCell>
                   <TableCell>{order.receivedAt.toLocaleDateString()}</TableCell>
-                  <TableCell>{order._count.uploadedFiles} files</TableCell>
+                  <TableCell>
+                    {order._count.uploadedFiles + order._count.processedFiles} files
+                  </TableCell>
                   <TableCell>
                     <Badge className={statusColors[order.status]}>
                       {statusLabels[order.status]}

@@ -9,6 +9,7 @@ const uploadUrlSchema = z.object({
   fileName: z.string().min(1, 'File name is required'),
   fileSize: z.number().positive('File size must be positive'),
   mimeType: z.string().min(1, 'MIME type is required'),
+  fileType: z.enum(['uploaded', 'processed']).optional(),
 });
 
 export async function POST(
@@ -29,12 +30,14 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    if (order.userId !== user.id) {
+    const isAdmin = user.role === 'ADMIN';
+
+    if (!isAdmin && order.userId !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Only allow uploads for orders in RECEIVED status
-    if (order.status !== 'RECEIVED') {
+    // Only allow customer uploads for orders in RECEIVED status
+    if (!isAdmin && order.status !== 'RECEIVED') {
       return NextResponse.json(
         { error: 'Cannot upload files to this order' },
         { status: 400 }
@@ -51,30 +54,52 @@ export async function POST(
       );
     }
 
-    const { fileName, fileSize, mimeType } = parsed.data;
+    const { fileName, fileSize, mimeType, fileType } = parsed.data;
+    const resolvedFileType = fileType ?? (isAdmin ? 'processed' : 'uploaded');
+
+    if (!isAdmin && resolvedFileType !== 'uploaded') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     // Generate storage key and presigned URL
-    const storageKey = generateStorageKey(userId!, fileName);
+    const storageKey = generateStorageKey(
+      userId!,
+      fileName,
+      resolvedFileType === 'processed' ? 'processed' : 'uploads'
+    );
     const uploadUrl = await generateUploadUrl(storageKey);
 
-    // Create pending file record
-    const file = await prisma.uploadedFile.create({
-      data: {
-        orderId,
-        fileName,
-        fileSize,
-        mimeType,
-        storageKey,
-        storageUrl: '', // Will be set after upload confirmation
-        uploadStatus: 'PENDING',
-        uploadedBy: userId!,
-      },
-    });
+    const file =
+      resolvedFileType === 'processed'
+        ? await prisma.processedFile.create({
+            data: {
+              orderId,
+              fileName,
+              fileSize,
+              mimeType,
+              storageKey,
+              storageUrl: '', // Will be set after upload confirmation
+              uploadedBy: userId!,
+            },
+          })
+        : await prisma.uploadedFile.create({
+            data: {
+              orderId,
+              fileName,
+              fileSize,
+              mimeType,
+              storageKey,
+              storageUrl: '', // Will be set after upload confirmation
+              uploadStatus: 'PENDING',
+              uploadedBy: userId!,
+            },
+          });
 
     return NextResponse.json({
       fileId: file.id,
       uploadUrl,
       storageKey,
+      fileType: resolvedFileType,
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes('Unauthorized')) {

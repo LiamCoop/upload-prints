@@ -20,11 +20,11 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 const statusColors: Record<OrderStatus, string> = {
-  RECEIVED: 'bg-blue-100 text-blue-800',
-  REVIEWING: 'bg-yellow-100 text-yellow-800',
-  READY_FOR_PRINT: 'bg-purple-100 text-purple-800',
-  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800',
-  COMPLETED: 'bg-green-100 text-green-800',
+  RECEIVED: 'bg-blue-100 text-blue-800 hover:bg-blue-100 hover:text-blue-800',
+  REVIEWING: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100 hover:text-yellow-800',
+  READY_FOR_PRINT: 'bg-purple-100 text-purple-800 hover:bg-purple-100 hover:text-purple-800',
+  SENT_TO_PRINTER: 'bg-orange-100 text-orange-800 hover:bg-orange-100 hover:text-orange-800',
+  COMPLETED: 'bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800',
 };
 
 interface OrdersTableProps {
