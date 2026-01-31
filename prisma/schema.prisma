@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Core Models
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String?
+  location  String?
+  role      UserRole @default(CUSTOMER)
+  orders    Order[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clerkId])
+  @@index([email])
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
+
+model Order {
+  id              String          @id @default(cuid())
+  orderNumber     String          @unique // ORD-2024-0001
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description     String          @db.Text
+  status          OrderStatus     @default(RECEIVED)
+
+  uploadedFiles   UploadedFile[]
+  processedFiles  ProcessedFile[]
+  statusHistory   StatusChange[]
+  adminActions    AdminAction[]
+
+  receivedAt      DateTime        @default(now())
+  reviewedAt      DateTime?
+  readyAt         DateTime?
+  sentToPrinterAt DateTime?
+  completedAt     DateTime?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([orderNumber])
+  @@index([createdAt])
+}
+
+enum OrderStatus {
+  RECEIVED
+  REVIEWING
+  READY_FOR_PRINT
+  SENT_TO_PRINTER
+  COMPLETED
+}
+
+model UploadedFile {
+  id            String       @id @default(cuid())
+  orderId       String
+  order         Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileSize      Int
+  mimeType      String
+  storageKey    String       @unique
+  storageUrl    String
+  uploadStatus  UploadStatus @default(PENDING)
+  uploadedBy    String       // Clerk user ID
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([orderId])
+  @@index([uploadedBy])
+}
+
+model ProcessedFile {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fileName    String
+  fileSize    Int
+  mimeType    String
+  storageKey  String   @unique
+  storageUrl  String
+  uploadedBy  String   // Admin Clerk ID
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([uploadedBy])
+}
+
+enum UploadStatus {
+  PENDING
+  UPLOADING
+  COMPLETED
+  FAILED
+}
+
+model StatusChange {
+  id          String      @id @default(cuid())
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  changedBy   String      // Clerk user ID
+  reason      String?     @db.Text
+  createdAt   DateTime    @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model AdminAction {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  adminId     String
+  actionType  AdminActionType
+  description String          @db.Text
+  metadata    Json?
+  createdAt   DateTime        @default(now())
+
+  @@index([orderId])
+  @@index([adminId])
+  @@index([actionType])
+  @@index([createdAt])
+}
+
+enum AdminActionType {
+  VIEWED_ORDER
+  STATUS_CHANGED
+  FILE_UPLOADED
+  NOTE_ADDED
+  EMAIL_SENT
+}
+
+model AdminSession {
+  id          String   @id @default(cuid())
+  adminId     String   @unique // Clerk user ID
+  lastVisitAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([adminId])
+}
