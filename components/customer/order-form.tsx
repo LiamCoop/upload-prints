@@ -144,7 +144,10 @@ export function OrderForm() {
 
       if (!orderResponse.ok) {
         const data = await orderResponse.json();
-        throw new Error(data.error || 'Failed to create order');
+        const errorMsg = data.details
+          ? `${data.error}: ${data.details}`
+          : data.error || 'Failed to create order';
+        throw new Error(errorMsg);
       }
 
       const order = await orderResponse.json();
