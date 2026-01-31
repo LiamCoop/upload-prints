@@ -54,6 +54,7 @@ export function OrderForm() {
 
     try {
       // Get presigned upload URL
+      console.log('Requesting upload URL for:', file.name);
       const urlResponse = await fetch(`/api/orders/${orderId}/upload-url`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -65,12 +66,16 @@ export function OrderForm() {
       });
 
       if (!urlResponse.ok) {
-        throw new Error('Failed to get upload URL');
+        const errorData = await urlResponse.json();
+        console.error('Upload URL request failed:', errorData);
+        throw new Error(errorData.error || 'Failed to get upload URL');
       }
 
       const { fileId, uploadUrl } = await urlResponse.json();
+      console.log('Got upload URL for file:', fileId);
 
       // Upload file to S3
+      console.log('Uploading to S3...');
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         body: file,
@@ -80,8 +85,12 @@ export function OrderForm() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+        const errorText = await uploadResponse.text();
+        console.error('S3 upload failed:', uploadResponse.status, errorText);
+        throw new Error(`Failed to upload file: ${uploadResponse.status}`);
       }
+
+      console.log('S3 upload successful');
 
       // Update progress
       setFiles((prev) =>
@@ -89,14 +98,19 @@ export function OrderForm() {
       );
 
       // Confirm upload
+      console.log('Confirming upload...');
       const confirmResponse = await fetch(
         `/api/orders/${orderId}/files/${fileId}/confirm`,
         { method: 'POST' }
       );
 
       if (!confirmResponse.ok) {
-        throw new Error('Failed to confirm upload');
+        const errorData = await confirmResponse.json();
+        console.error('Confirm upload failed:', errorData);
+        throw new Error(errorData.error || 'Failed to confirm upload');
       }
+
+      console.log('Upload confirmed');
 
       // Mark as completed
       setFiles((prev) =>
