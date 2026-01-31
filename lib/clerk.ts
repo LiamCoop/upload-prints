@@ -4,6 +4,7 @@ import { UserRole } from '@prisma/client';
 
 /**
  * Get the current user from Clerk and sync with database
+ * Creates the user if they don't exist yet
  * @returns User from database or null if not authenticated
  */
 export async function getCurrentUser() {
@@ -14,9 +15,35 @@ export async function getCurrentUser() {
   }
 
   // Get user from database
-  const user = await prisma.user.findUnique({
+  let user = await prisma.user.findUnique({
     where: { clerkId: userId },
   });
+
+  // If user doesn't exist, create them
+  if (!user) {
+    const clerkUser = await currentUser();
+    if (!clerkUser) {
+      return null;
+    }
+
+    const email = clerkUser.emailAddresses[0]?.emailAddress;
+    if (!email) {
+      return null;
+    }
+
+    // Check if user should be admin
+    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
+    const isAdminUser = adminEmails.includes(email.toLowerCase());
+
+    user = await prisma.user.create({
+      data: {
+        clerkId: userId,
+        email,
+        name: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() : null,
+        role: isAdminUser ? UserRole.ADMIN : UserRole.CUSTOMER,
+      },
+    });
+  }
 
   return user;
 }
