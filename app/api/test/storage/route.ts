@@ -19,13 +19,18 @@ export async function GET() {
         error: 'Failed to generate upload URL',
         details: error instanceof Error ? error.message : 'Unknown error',
         envCheck: {
-          hasAccessKey: !!process.env.RAILWAY_BUCKET_ACCESS_KEY,
-          hasSecretKey: !!process.env.RAILWAY_BUCKET_SECRET_KEY,
-          hasEndpoint: !!process.env.RAILWAY_BUCKET_ENDPOINT,
-          hasBucketName: !!process.env.RAILWAY_BUCKET_NAME,
-          endpoint: process.env.RAILWAY_BUCKET_ENDPOINT || 'NOT_SET',
-          bucketName: process.env.RAILWAY_BUCKET_NAME || 'NOT_SET',
-          region: process.env.RAILWAY_BUCKET_REGION || 'NOT_SET',
+          // Railway default names
+          bucket: process.env.BUCKET || 'NOT_SET',
+          accessKeyId: process.env.ACCESS_KEY_ID ? '***SET***' : 'NOT_SET',
+          secretAccessKey: process.env.SECRET_ACCESS_KEY ? '***SET***' : 'NOT_SET',
+          endpoint: process.env.ENDPOINT || 'NOT_SET',
+          region: process.env.REGION || 'NOT_SET',
+          // Custom prefixed names (fallback)
+          railwayBucketName: process.env.RAILWAY_BUCKET_NAME || 'NOT_SET',
+          railwayBucketAccessKey: process.env.RAILWAY_BUCKET_ACCESS_KEY ? '***SET***' : 'NOT_SET',
+          railwayBucketSecretKey: process.env.RAILWAY_BUCKET_SECRET_KEY ? '***SET***' : 'NOT_SET',
+          railwayBucketEndpoint: process.env.RAILWAY_BUCKET_ENDPOINT || 'NOT_SET',
+          railwayBucketRegion: process.env.RAILWAY_BUCKET_REGION || 'NOT_SET',
         }
       }, { status: 500 });
     }
@@ -40,9 +45,9 @@ export async function GET() {
         fileVerification: !exists ? 'PASS' : 'FAIL (should be false for non-existent file)',
       },
       config: {
-        endpoint: process.env.RAILWAY_BUCKET_ENDPOINT,
-        bucketName: process.env.RAILWAY_BUCKET_NAME,
-        region: process.env.RAILWAY_BUCKET_REGION,
+        bucket: process.env.BUCKET || process.env.RAILWAY_BUCKET_NAME,
+        endpoint: process.env.ENDPOINT || process.env.RAILWAY_BUCKET_ENDPOINT,
+        region: process.env.REGION || process.env.RAILWAY_BUCKET_REGION,
       },
       uploadUrl: uploadUrl.substring(0, 100) + '...',
       testStorageKey: testKey,

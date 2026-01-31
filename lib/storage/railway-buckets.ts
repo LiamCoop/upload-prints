@@ -1,18 +1,28 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+// Railway provides: BUCKET, ACCESS_KEY_ID, SECRET_ACCESS_KEY, ENDPOINT, REGION
+// Support both Railway's default names and custom prefixed names for local dev
+const BUCKET_NAME = process.env.BUCKET || process.env.RAILWAY_BUCKET_NAME || '';
+const ACCESS_KEY_ID = process.env.ACCESS_KEY_ID || process.env.RAILWAY_BUCKET_ACCESS_KEY || '';
+const SECRET_ACCESS_KEY = process.env.SECRET_ACCESS_KEY || process.env.RAILWAY_BUCKET_SECRET_KEY || '';
+const ENDPOINT = process.env.ENDPOINT || process.env.RAILWAY_BUCKET_ENDPOINT || 'https://storage.railway.app';
+const REGION = process.env.REGION || process.env.RAILWAY_BUCKET_REGION || 'auto';
+
+if (!BUCKET_NAME || !ACCESS_KEY_ID || !SECRET_ACCESS_KEY) {
+  console.warn('Railway Bucket credentials not configured. File uploads will fail.');
+}
+
 // Initialize S3 client for Railway Buckets (S3-compatible)
 const s3Client = new S3Client({
-  region: process.env.RAILWAY_BUCKET_REGION || 'us-west-1',
+  region: REGION,
   credentials: {
-    accessKeyId: process.env.RAILWAY_BUCKET_ACCESS_KEY || '',
-    secretAccessKey: process.env.RAILWAY_BUCKET_SECRET_KEY || '',
+    accessKeyId: ACCESS_KEY_ID,
+    secretAccessKey: SECRET_ACCESS_KEY,
   },
-  endpoint: process.env.RAILWAY_BUCKET_ENDPOINT,
-  forcePathStyle: true, // Required for S3-compatible services
+  endpoint: ENDPOINT,
+  forcePathStyle: false, // Railway uses virtual-hosted style (bucket.storage.railway.app)
 });
-
-const BUCKET_NAME = process.env.RAILWAY_BUCKET_NAME || 'upload-prints-files';
 
 /**
  * Generate a presigned URL for uploading a file
