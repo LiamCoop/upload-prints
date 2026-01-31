@@ -19,7 +19,7 @@ export async function getCurrentUser() {
     where: { clerkId: userId },
   });
 
-  // If user doesn't exist, create them
+  // If user doesn't exist, create or update them
   if (!user) {
     const clerkUser = await currentUser();
     if (!clerkUser) {
@@ -35,8 +35,15 @@ export async function getCurrentUser() {
     const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase());
     const isAdminUser = adminEmails.includes(email.toLowerCase());
 
-    user = await prisma.user.create({
-      data: {
+    // Use upsert to handle case where user exists with this email but different clerkId
+    user = await prisma.user.upsert({
+      where: { email },
+      update: {
+        clerkId: userId,
+        name: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() : null,
+        role: isAdminUser ? UserRole.ADMIN : UserRole.CUSTOMER,
+      },
+      create: {
         clerkId: userId,
         email,
         name: clerkUser.firstName ? `${clerkUser.firstName} ${clerkUser.lastName || ''}`.trim() : null,
